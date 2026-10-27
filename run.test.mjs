@@ -45,3 +45,11 @@ test("summary: a table, the fixes, and the marker for updating one comment", () 
   assert.match(md, /\| ✅ \| `a\\\|b\.example` \| X25519MLKEM768 \|/);
   assert.match(md, /- `b\.example`: Fix it/);
 });
+
+test("a mixed host (post-quantum on some connections) isn't post-quantum, and says why", () => {
+  const [m] = parseJsonl('{"host":"g.example","port":443,"verdict":"mixed","cause":"no-mlkem","headline":"Mixed: post-quantum on some connections, not on others"}\n').map(fromRecord);
+  assert.equal(m.state, "not-pq");
+  assert.match(m.fix, /not a regression/);
+  assert.equal(fails(m, "regression"), false);
+  assert.equal(regressionsFrom(JSON.stringify({ regressed: [], mixed: [{ target: "g.example:443" }] })).length, 0);
+});

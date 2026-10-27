@@ -65,7 +65,12 @@ export function fromRecord(r) {
     group: r.group ?? null,
     headline: r.headline,
     cause: r.cause ?? null,
-    fix: !pq && answered ? `${[cls ? CLASS[cls] ?? cls : null, what ? `(${what})` : null].filter(Boolean).join(" ") || r.cause} — run \`pqdoctor ${r.host}${r.port && r.port !== 443 ? `:${r.port}` : ""}\` for the fix` : null,
+    fix:
+      r.verdict === "mixed"
+        ? "post-quantum on some connections, not others: the servers behind it disagree (often a provider mid-rollout); not a regression"
+        : !pq && answered
+          ? `${[cls ? CLASS[cls] ?? cls : null, what ? `(${what})` : null].filter(Boolean).join(" ") || r.cause} — run \`pqdoctor ${r.host}${r.port && r.port !== 443 ? `:${r.port}` : ""}\` for the fix`
+          : null,
     report: r,
   };
 }
