@@ -6,7 +6,14 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-export const BASE = process.env.PQDOCTOR_DOWNLOAD_BASE ?? "https://pqdoctor.com/downloads";
+// Where a version's files come from, tried in order. This repository's own release first: GitHub's
+// runners always reach it (pqdoctor.com has refused some runner addresses with 403), and it holds
+// the same files and SHA256SUMS.txt, built and attested by the `build` workflow. Then pqdoctor.com.
+// PQDOCTOR_DOWNLOAD_BASE (one or more, comma-separated, each holding v<version>/) replaces both.
+export function basesFor(version) {
+  if (process.env.PQDOCTOR_DOWNLOAD_BASE) return process.env.PQDOCTOR_DOWNLOAD_BASE.split(",").map((b) => `${b.trim()}/v${version}`);
+  return [`https://github.com/Kalyan-Deva/pqdoctor-action/releases/download/pqdoctor-v${version}`, `https://pqdoctor.com/downloads/v${version}`];
+}
 
 /** The release file for this runner (RUNNER_OS / process.platform, arch). */
 export function assetFor(version, platform = process.platform, arch = process.arch) {
@@ -37,13 +44,29 @@ async function get(url) {
 export async function install(version, dest) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`version must look like 0.3.0 (got ${version})`);
   const a = assetFor(version);
-  const base = `${BASE}/v${version}`;
-  const sums = new TextDecoder().decode(await get(`${base}/SHA256SUMS.txt`));
-  const want = sumFor(sums, a.file);
-  if (!want) throw new Error(`${a.file} isn't listed in ${base}/SHA256SUMS.txt`);
-  const data = await get(`${base}/${a.file}`);
-  const got = createHash("sha256").update(data).digest("hex");
-  if (got !== want) throw new Error(`checksum mismatch for ${a.file}: expected ${want}, got ${got} — not installing it`);
+  let data;
+  const failed = [];
+  for (const base of basesFor(version)) {
+    let sums;
+    try {
+      sums = new TextDecoder().decode(await get(`${base}/SHA256SUMS.txt`));
+    } catch (e) {
+      failed.push(e.message); // unreachable here: try the next source
+      continue;
+    }
+    const want = sumFor(sums, a.file);
+    if (!want) throw new Error(`${a.file} isn't listed in ${base}/SHA256SUMS.txt`);
+    try {
+      data = await get(`${base}/${a.file}`);
+    } catch (e) {
+      failed.push(e.message);
+      continue;
+    }
+    const got = createHash("sha256").update(data).digest("hex");
+    if (got !== want) throw new Error(`checksum mismatch for ${a.file}: expected ${want}, got ${got} — not installing it`);
+    break;
+  }
+  if (!data) throw new Error(`couldn't download ${a.file}: ${failed.join("; ")}`);
   mkdirSync(dest, { recursive: true });
   const saved = join(dest, a.file);
   writeFileSync(saved, data);

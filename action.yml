@@ -29,7 +29,7 @@ inputs:
   version:
     description: The pqdoctor release to install (prebuilt, verified against the release's SHA256SUMS.txt).
     required: false
-    default: "0.3.0"
+    default: "0.4.0"
   install:
     description: "release (default): download the prebuilt binary. source: build that version from crates.io with cargo (needs Rust 1.85+)."
     required: false
