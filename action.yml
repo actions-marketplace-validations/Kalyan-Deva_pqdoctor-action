@@ -27,13 +27,13 @@ inputs:
     required: false
     default: "true"
   version:
-    description: The pqdoctor release to install (prebuilt, verified against the release's SHA256SUMS.txt).
+    description: The pqdoctor version to install from npm.
     required: false
     default: "0.4.0"
   install:
-    description: "release (default): download the prebuilt binary. source: build that version from crates.io with cargo (needs Rust 1.85+)."
+    description: "npm (default): the prebuilt binary from npm. `release` is accepted as the old name."
     required: false
-    default: release
+    default: npm
   upload-sarif:
     description: "true: upload the SARIF to GitHub code scanning (needs `permissions: security-events: write`)."
     required: false
@@ -82,24 +82,11 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install pqdoctor (prebuilt, checksum-verified)
-      if: inputs.install == 'release'
+    - name: Install pqdoctor (prebuilt, from npm)
+      if: inputs.install == 'npm' || inputs.install == 'release'
       id: release
       shell: bash
       run: echo "bin=$(node "$GITHUB_ACTION_PATH/install.mjs" "${{ inputs.version }}" "$RUNNER_TEMP/pqdoctor-bin")" >> "$GITHUB_OUTPUT"
-    - name: Cache the pqdoctor build
-      if: inputs.install == 'source'
-      uses: actions/cache@v6
-      with:
-        path: ${{ runner.temp }}/pqdoctor-src
-        key: pqdoctor-src-${{ runner.os }}-${{ runner.arch }}-${{ inputs.version }}
-    - name: Build pqdoctor from source (crates.io)
-      if: inputs.install == 'source'
-      id: source
-      shell: bash
-      run: |
-        cargo install pqdoctor --version "${{ inputs.version }}" --locked --root "$RUNNER_TEMP/pqdoctor-src"
-        echo "bin=$RUNNER_TEMP/pqdoctor-src/bin/pqdoctor${{ runner.os == 'Windows' && '.exe' || '' }}" >> "$GITHUB_OUTPUT"
     # The last run's records, so "regression" can compare (one cache entry per repository + host list).
     - name: Restore the last run
       uses: actions/cache/restore@v6
@@ -122,7 +109,7 @@ runs:
         INPUT_OWNERS: ${{ inputs.owners }}
         FLEET_TOKEN: ${{ inputs.fleet-token }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
-        PQDOCTOR: ${{ steps.release.outputs.bin || steps.source.outputs.bin }}
+        PQDOCTOR: ${{ steps.release.outputs.bin }}
       run: node "$GITHUB_ACTION_PATH/run.mjs"
     - name: Save this run for next time
       if: always()
